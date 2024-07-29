@@ -33,35 +33,92 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "lib/util/io/key/layout/DeLayout.h"
 #include "lib/util/game/Engine.h"
 
-unsigned char pal[768];
-Util::Graphic::LinearFrameBuffer *lfb = nullptr;
-Util::Io::KeyDecoder *kd = nullptr;
+uint8_t palette[768];
+Util::Graphic::LinearFrameBuffer *lfb;
+Util::Graphic::BufferedLinearFrameBuffer *bufferedlfb;
+Util::Io::KeyDecoder *kd;
 
-int main(int argc, char *argv[]) {
+uint32_t scaleFactor = 1;
+uint32_t offsetX = 0;
+uint32_t offsetY = 0;
+
+int32_t main(int argc, char *argv[]) {
     if (!Util::Io::File::changeDirectory("/user/quake")) {
         Util::System::error << "quake: '/user/quake' not found!" << Util::Io::PrintStream::endl << Util::Io::PrintStream::flush;
         return -1;
     }
 
-    Util::Graphic::Ansi::prepareGraphicalApplication(true);
-    auto lfbFile = Util::Io::File("/device/lfb");
-    lfb = new Util::Graphic::LinearFrameBuffer(lfbFile);
-    lfb->clear();
-
-    double oldtime, newtime;
-
     QG_Create(argc, argv);
 
-    oldtime = (static_cast<double>(clock()) / CLOCKS_PER_SEC) - 0.1;
+    // Prepare graphics
+    Util::Graphic::Ansi::prepareGraphicalApplication(true);
+    auto lfbFile = new Util::Io::File("/device/lfb");
+
+    // If '-res is given, try to change display resolution
+    for (int32_t i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "-res") && i < argc - 1) {
+            auto resSplit = Util::String(argv[i + 1]).split("x");
+            uint32_t x = Util::String::parseInt(resSplit[0]);
+            uint32_t y = Util::String::parseInt(resSplit[1]);
+            lfbFile->controlFile(Util::Graphic::LinearFrameBuffer::SET_RESOLUTION, Util::Array<uint32_t>({x, y, 32}));
+
+            break;
+        }
+    }
+
+    // Use double buffering to avoid tearing
+    lfb = new Util::Graphic::LinearFrameBuffer(*lfbFile);
+    bufferedlfb = new Util::Graphic::BufferedLinearFrameBuffer(*lfb);
+
+    // Calculate scale factor the game as large as possible
+    scaleFactor = lfb->getResolutionX() / QUAKEGENERIC_RES_X;
+    if (lfb->getResolutionY() / QUAKEGENERIC_RES_Y < scaleFactor) {
+        scaleFactor = lfb->getResolutionY() / QUAKEGENERIC_RES_Y;
+    }
+    if (scaleFactor == 0) {
+        scaleFactor = 1;
+    }
+
+    // Calculate offset to center the game
+    offsetX = lfb->getResolutionX() - QUAKEGENERIC_RES_X * scaleFactor > 0 ? (lfb->getResolutionX() - QUAKEGENERIC_RES_X * scaleFactor) / 2 : 0;
+    offsetY = lfb->getResolutionY() - QUAKEGENERIC_RES_Y * scaleFactor > 0 ? (lfb->getResolutionY() - QUAKEGENERIC_RES_Y * scaleFactor) / 2 : 0;
+
+    double oldTime = (static_cast<double>(clock()) / CLOCKS_PER_SEC) - 0.1;
     while (true) {
-        newtime = static_cast<double>(clock()) / CLOCKS_PER_SEC;
-        QG_Tick(newtime - oldtime);
-        oldtime = newtime;
+        double newTime = static_cast<double>(clock()) / CLOCKS_PER_SEC;
+        QG_Tick(newTime - oldTime);
+        oldTime = newTime;
     }
 }
 
 void QG_Init(void) {
     kd = new Util::Io::KeyDecoder(new Util::Io::DeLayout());
+}
+
+void QG_SetPalette(uint8_t source[768]) {
+    memcpy(palette, source, 768);
+}
+
+void QG_DrawFrame(void *pixels) {
+    if (bufferedlfb == nullptr) {
+        return;
+    }
+
+    auto screenBuffer = reinterpret_cast<uint32_t*>(bufferedlfb->getBuffer().add(offsetX * 4 + offsetY * bufferedlfb->getPitch()).get());
+    auto resX = QUAKEGENERIC_RES_X * scaleFactor > bufferedlfb->getResolutionX() ? bufferedlfb->getResolutionX() : QUAKEGENERIC_RES_X * scaleFactor;
+    auto resY = QUAKEGENERIC_RES_Y * scaleFactor > bufferedlfb->getResolutionY() ? bufferedlfb->getResolutionY() : QUAKEGENERIC_RES_Y * scaleFactor;
+
+    for (uint32_t y = 0; y < resY; y++) {
+        for (uint32_t x = 0; x < resX; x++) {
+            uint8_t pixel = reinterpret_cast<uint8_t*>(pixels)[(y / scaleFactor) * QUAKEGENERIC_RES_X + (x / scaleFactor)];
+            uint8_t *paletteEntry = &((uint8_t*) palette)[pixel * 3];
+            screenBuffer[x] = (*(paletteEntry) << 16) + (*(paletteEntry + 1) << 8) + *(paletteEntry + 2);
+        }
+
+        screenBuffer += (bufferedlfb->getPitch() / sizeof(uint32_t));
+    }
+
+    bufferedlfb->flush();
 }
 
 int QG_GetKey(int *down, int *key) {
@@ -149,30 +206,4 @@ void QG_Quit(void) {
     Util::Graphic::Ansi::cleanupGraphicalApplication();
     delete lfb;
     delete kd;
-}
-
-void QG_DrawFrame(void *pixels) {
-    if (lfb == nullptr) {
-        return;
-    }
-
-    auto offsetX = lfb->getResolutionX() - QUAKEGENERIC_RES_X * 2 > 0 ? (lfb->getResolutionX() - QUAKEGENERIC_RES_X * 2) / 2 : 0;
-    auto offsetY = lfb->getResolutionY() - QUAKEGENERIC_RES_Y * 2 > 0 ? (lfb->getResolutionY() - QUAKEGENERIC_RES_Y * 2) / 2 : 0;
-
-    auto screenBuffer = lfb->getBuffer().add(offsetX * 4 + offsetY * lfb->getPitch());
-
-    for (uint32_t y = 0; y < QUAKEGENERIC_RES_Y * 2; y++) {
-        for (uint32_t x = 0; x < QUAKEGENERIC_RES_X * 2; x += 2) {
-            uint8_t pixel = ((uint8_t*) pixels)[(y / 2) * QUAKEGENERIC_RES_X + (x / 2)];
-            uint8_t *entry = &((uint8_t*) pal)[pixel * 3];
-            uint64_t value = (*(entry) << 16) + (*(entry + 1) << 8) + *(entry + 2);
-            screenBuffer.add(x * 4).setLong((value << 32) | value);
-        }
-
-        screenBuffer = screenBuffer.add(lfb->getPitch());
-    }
-}
-
-void QG_SetPalette(unsigned char palette[768]) {
-    memcpy(pal, palette, 768);
 }
