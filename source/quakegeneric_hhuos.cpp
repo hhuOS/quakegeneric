@@ -22,9 +22,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <stdint.h>
 #include <string.h>
 #include <ctype.h>
-#include <cstdio>
+#include <stdio.h>
+
 #include "quakegeneric.h"
-#include "quakegeneric.h"
+
 #include "lib/util/base/Address.h"
 #include "lib/util/graphic/Ansi.h"
 #include "lib/util/io/file/File.h"
@@ -83,11 +84,16 @@ int32_t main(int argc, char *argv[]) {
     offsetX = lfb->getResolutionX() - QUAKEGENERIC_RES_X * scaleFactor > 0 ? (lfb->getResolutionX() - QUAKEGENERIC_RES_X * scaleFactor) / 2 : 0;
     offsetY = lfb->getResolutionY() - QUAKEGENERIC_RES_Y * scaleFactor > 0 ? (lfb->getResolutionY() - QUAKEGENERIC_RES_Y * scaleFactor) / 2 : 0;
 
-    double oldTime = (static_cast<double>(clock()) / CLOCKS_PER_SEC) - 0.1;
+    // Run game loop
+    auto oldTime = clock();
     while (true) {
-        double newTime = static_cast<double>(clock()) / CLOCKS_PER_SEC;
-        QG_Tick(newTime - oldTime);
-        oldTime = newTime;
+        auto newTime = clock();
+        if (oldTime == newTime) {
+            Util::Async::Thread::yield();
+        } else {
+            QG_Tick((newTime - oldTime) / static_cast<double>(CLOCKS_PER_SEC));
+            oldTime = newTime;
+        }
     }
 }
 
