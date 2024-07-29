@@ -185,6 +185,60 @@ int QG_GetKey(int *down, int *key) {
                 case Util::Io::Key::BACKSPACE:
                     *key = K_BACKSPACE;
                     return 1;
+                case Util::Io::Key::HOME:
+                    *key = K_HOME;
+                    return 1;
+                case Util::Io::Key::END:
+                    *key = K_END;
+                    return 1;
+                case Util::Io::Key::INSERT:
+                    *key = K_INS;
+                    return 1;
+                case Util::Io::Key::DEL:
+                    *key = K_DEL;
+                    return 1;
+                case Util::Io::Key::PAGE_UP:
+                    *key = K_PGUP;
+                    return 1;
+                case Util::Io::Key::PAGE_DOWN:
+                    *key = K_PGDN;
+                    return 1;
+                case Util::Io::Key::F1:
+                    *key = K_F1;
+                    return 1;
+                case Util::Io::Key::F2:
+                    *key = K_F2;
+                    return 1;
+                case Util::Io::Key::F3:
+                    *key = K_F3;
+                    return 1;
+                case Util::Io::Key::F4:
+                    *key = K_F4;
+                    return 1;
+                case Util::Io::Key::F5:
+                    *key = K_F5;
+                    return 1;
+                case Util::Io::Key::F6:
+                    *key = K_F6;
+                    return 1;
+                case Util::Io::Key::F7:
+                    *key = K_F7;
+                    return 1;
+                case Util::Io::Key::F8:
+                    *key = K_F8;
+                    return 1;
+                case Util::Io::Key::F9:
+                    *key = K_F9;
+                    return 1;
+                case Util::Io::Key::F10:
+                    *key = K_F10;
+                    return 1;
+                case Util::Io::Key::F11:
+                    *key = K_F11;
+                    return 1;
+                case Util::Io::Key::F12:
+                    *key = K_F12;
+                    return 1;
                 default:
                     if (k.getAscii()) {
                         *key = tolower(k.getAscii());
